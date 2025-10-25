@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Sequence Game</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        /* Define custom colors and variables */
+        :root {
+            --color-red: #ef4444; /* red-500 */
+            --color-green: #22c55e; /* green-500 */
+            --color-blue: #3b82f6; /* blue-500 */
+            --color-yellow: #facc15; /* yellow-400 */
+            --bg-primary: #f8fafc; /* slate-50 */
+            --text-primary: #1e293b; /* slate-800 */
+            --card-bg: #ffffff;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --board-radius: 5rem;
+        }
+
+        .dark {
+            --color-red: #dc2626; /* red-600 for dark mode */
+            --color-green: #16a34a; /* green-600 for dark mode */
+            --color-blue: #2563eb; /* blue-600 for dark mode */
+            --color-yellow: #fbbf24; /* yellow-500 for dark mode */
+            --bg-primary: #1e293b; /* slate-800 */
+            --text-primary: #f8fafc; /* slate-50 */
+            --card-bg: #334155; /* slate-700 */
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Game Board Layout */
+        #game-board {
+            width: clamp(280px, 90vw, 500px); /* Responsive size control */
+            height: clamp(280px, 90vw, 500px);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            margin: 20px auto;
+            border-radius: var(--board-radius);
+            box-shadow: var(--shadow);
+            position: relative;
+        }
+
+        /* Individual Color Pads */
+        .game-pad {
+            border-radius: 1.5rem;
+            cursor: pointer;
+            transition: opacity 0.1s ease-in-out, box-shadow 0.3s, filter 0.3s, transform 0.1s;
+            filter: brightness(0.9);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .game-pad:active:not(.unclickable) {
+            transform: scale(0.98);
+        }
+
+        .game-pad.unclickable {
+            cursor: not-allowed;
+        }
+
+        /* Specific Pad Positioning and Color */
+        #red-pad {
+            background-color: var(--color-red);
+            border-top-left-radius: var(--board-radius);
+        }
+
+        #green-pad {
+            background-color: var(--color-green);
+            border-top-right-radius: var(--board-radius);
+        }
+
+        #blue-pad {
+            background-color: var(--color-blue);
+            border-bottom-left-radius: var(--board-radius);
+        }
+
+        #yellow-pad {
+            background-color: var(--color-yellow);
+            border-bottom-right-radius: var(--board-radius);
+        }
+
+        /* Highlight Effect (used by JS) */
+        .highlight {
+            filter: brightness(1.2) !important;
+            box-shadow: 0 0 20px 5px currentColor !important;
+        }
+
+        /* Center Display Area */
+        #game-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50%;
+            height: 50%;
+            background-color: var(--card-bg);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        /* Custom Toggle Switch (Tailwind-friendly style) */
+        .toggle-switch input:checked + .slider {
+            background-color: #2563eb; /* blue-600 */
+        }
+        
+        /* FIX: Change ::before to ::after to match the element defined by Tailwind classes */
+        .toggle-switch input:checked + .slider::after {
+            transform: translateX(20px);
+        }
+        .slider {
+            background-color: #ccc;
+            transition: .4s;
+        }
+        /* FIX: Change ::before to ::after to style the moving circle */
+        .slider::after {
+            background-color: white;
+            transition: .4s;
+        }
+
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+
+    <!-- Theme Toggle Switch (Top Left) -->
+    <div class="absolute top-4 left-4 z-20 flex items-center space-x-2">
+        <!-- Sun Icon (Light Mode) - Brighter in light mode, dimmed in dark mode -->
+        <svg class="w-5 h-5 text-yellow-500 dark:text-gray-400 transition-colors duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        
+        <label for="theme-switch" class="toggle-switch relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="theme-switch" class="sr-only peer">
+            <!-- The 'after:left-[2px]' class sets the initial position (Light/Left) -->
+            <span class="slider round h-6 w-11 rounded-full after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:content-[''] after:shadow-md"></span>
+        </label>
+        
+        <!-- Moon Icon (Dark Mode) - Dimmed in light mode, brighter in dark mode -->
+        <svg class="w-5 h-5 text-gray-600 dark:text-yellow-400 transition-colors duration-300" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.629c-.114.113-.264.186-.425.215a.997.997 0 01-.157.009c-.066 0-.131-.004-.196-.013-1.011-.137-2.07-.638-3.033-1.465-1.576-1.353-2.92-3.23-3.69-5.186-.33-.865-.333-1.78-.01-2.67.625-1.72 2.3-3.05 4.316-3.414 1.942-.35 3.93.36 5.372 1.802s2.152 3.43 1.802 5.372c-.364 2.016-1.694 3.69-3.414 4.316zm-5.786-4.992c.11.23.01.49-.22.6-.23.11-.49.01-.6-.22-.11-.23-.01-.49.22-.6.23-.11.49-.01.6.22z"></path></svg>
+    </div>
+
+    <!-- Main Game Container -->
+    <div class="flex flex-col items-center justify-center w-full max-w-lg mt-10">
+
+        <h1 class="text-3xl sm:text-4xl font-extrabold mb-8 tracking-tight">The Sequence Game</h1>
+
+        <div id="game-board">
+            <!-- Game Pads -->
+            <div id="red-pad" class="game-pad" data-color="red"></div>
+            <div id="green-pad" class="game-pad" data-color="green"></div>
+            <div id="blue-pad" class="game-pad" data-color="blue"></div>
+            <div id="yellow-pad" class="game-pad" data-color="yellow"></div>
+
+            <!-- Center Status Display -->
+            <div id="game-center" class="select-none">
+                <p id="game-message" class="text-lg font-semibold mb-2">Press Start</p>
+                <div class="text-4xl font-mono font-bold" id="score-display">0</div>
+                <button id="start-button" class="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-full shadow-lg transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                    Start Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Constants ---
+        const pads = document.querySelectorAll('.game-pad');
+        const startButton = document.getElementById('start-button');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameMessage = document.getElementById('game-message');
+        const themeSwitch = document.getElementById('theme-switch');
+
+        const colors = ['red', 'green', 'blue', 'yellow'];
+
+        let gameSequence = [];
+        let playerSequence = [];
+        let score = 0;
+        let isPlayerTurn = false;
+        let isGameRunning = false;
+        let speedFactor = 1.0; // Controls the speed of the sequence play (lower = faster)
+        
+        // Use a simple synth from Tone.js for the sounds
+        // Note: Tone.js requires audio context initialization, which is usually fine after a user interaction.
+        const synth = new Tone.MembraneSynth().toDestination();
+
+        // --- Theme Switching Logic ---
+
+        // Check initial system preference for dark mode
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        // Load preference from local storage or use system preference
+        const storedTheme = localStorage.getItem('theme');
+        if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+            document.documentElement.classList.add('dark');
+            themeSwitch.checked = true; // Checked state moves slider right (Dark Mode)
+        } else {
+            document.documentElement.classList.remove('dark');
+            themeSwitch.checked = false; // Unchecked state keeps slider left (Light Mode)
+        }
+
+        function toggleTheme() {
+            if (themeSwitch.checked) {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
+        themeSwitch.addEventListener('change', toggleTheme);
+
+        // --- Game Setup and Core Logic ---
+
+        function startGame() {
+            if (isGameRunning) return;
+            
+            // Initializing Game State
+            isGameRunning = true;
+            gameSequence = [];
+            score = 0;
+            speedFactor = 1.0;
+            scoreDisplay.textContent = score;
+            startButton.disabled = true;
+            startButton.textContent = 'Wait...';
+            gameMessage.textContent = 'Watch the sequence!';
+
+            // Remove unclickable class to allow highlights
+            pads.forEach(pad => pad.classList.remove('unclickable'));
+            
+            // Start the first round
+            setTimeout(nextSequence, 1000); 
+        }
+
+        function gameOver(level) {
+            isGameRunning = false;
+            isPlayerTurn = false;
+            startButton.disabled = false;
+            
+            gameMessage.textContent = `Game Over! You reached level ${level}.`;
+            startButton.textContent = 'Play Again';
+
+            // Visually "reset" the board by adding unclickable class
+            pads.forEach(pad => pad.classList.add('unclickable'));
+        }
+
+        function nextSequence() {
+            playerSequence = [];
+            isPlayerTurn = false;
+            gameMessage.textContent = `Level ${score + 1}: Watch!`;
+            
+            // 1. Add a new random color to the sequence
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            gameSequence.push(randomColor);
+            
+            // 2. Adjust speed based on current level (optional but fun)
+            if (gameSequence.length > 5) speedFactor = 0.8;
+            if (gameSequence.length > 9) speedFactor = 0.6;
+
+            // 3. Play the sequence
+            playSequence(gameSequence);
+        }
+
+        async function playSequence(sequence) {
+            // Disable player input during playback
+            pads.forEach(pad => pad.classList.add('unclickable'));
+            startButton.disabled = true;
+
+            const flashDuration = 400 * speedFactor;
+            const pauseDuration = 100 * speedFactor;
+
+            await new Promise(resolve => setTimeout(resolve, 500)); // Initial brief pause
+
+            for (const color of sequence) {
+                const pad = document.querySelector(`[data-color="${color}"]`);
+                if (pad) {
+                    highlightPad(pad);
+                    // Wait for the duration of the flash
+                    await new Promise(resolve => setTimeout(resolve, flashDuration));
+                    unhighlightPad(pad);
+                    // Wait for the pause between flashes
+                    await new Promise(resolve => setTimeout(resolve, pauseDuration));
+                }
+            }
+
+            // Sequence finished, enable player turn
+            startPlayerTurn();
+        }
+
+        function startPlayerTurn() {
+            isPlayerTurn = true;
+            startButton.disabled = false;
+            startButton.textContent = 'Listening...';
+            gameMessage.textContent = `Your turn! Repeat the sequence.`;
+            pads.forEach(pad => pad.classList.remove('unclickable')); // Enable clicks
+        }
+        
+        // --- UI and Sound Effects ---
+
+        function highlightPad(pad) {
+            pad.classList.add('highlight');
+            // Play a tone when highlighted
+            const note = getNoteForColor(pad.dataset.color);
+            if (note) {
+                // Trigger the tone immediately
+                synth.triggerAttackRelease(note, "8n");
+            }
+        }
+
+        function unhighlightPad(pad) {
+            pad.classList.remove('highlight');
+        }
+
+        function getNoteForColor(color) {
+            // Simple mapping for tones (C Major chord tones)
+            switch (color) {
+                case 'red': return 'C4';
+                case 'green': return 'E4';
+                case 'blue': return 'G4';
+                case 'yellow': return 'C5';
+                default: return null;
+            }
+        }
+
+        // --- Player Interaction ---
+
+        function handlePadClick(event) {
+            if (!isGameRunning || !isPlayerTurn) return;
+
+            const pad = event.currentTarget;
+            const color = pad.dataset.color;
+            
+            highlightPad(pad);
+            
+            // Immediate unhighlight with a short delay for visual feedback
+            setTimeout(() => unhighlightPad(pad), 100); 
+
+            playerSequence.push(color);
+            checkMatch(color);
+        }
+
+        function checkMatch(lastColor) {
+            const currentStep = playerSequence.length - 1;
+
+            if (playerSequence[currentStep] !== gameSequence[currentStep]) {
+                // Mismatch: Game Over
+                gameOver(score);
+                return;
+            }
+
+            // Match is correct so far
+            if (playerSequence.length === gameSequence.length) {
+                // Player completed the sequence successfully
+                isPlayerTurn = false;
+                score++;
+                scoreDisplay.textContent = score;
+                gameMessage.textContent = 'Success! Next round...';
+
+                // Delay before starting the next sequence
+                setTimeout(nextSequence, 1000);
+            }
+            // Otherwise, keep waiting for more player input
+        }
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startGame);
+        pads.forEach(pad => pad.addEventListener('click', handlePadClick));
+        
+        // Initial setup for pads (ensure they start unclickable until game starts)
+        pads.forEach(pad => pad.classList.add('unclickable'));
+
+    </script>
+</body>
+</html>
